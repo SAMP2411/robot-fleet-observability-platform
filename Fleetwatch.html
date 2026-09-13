@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FleetWatch — Robot Fleet Observability</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh}
+  
+  /* Login */
+  #login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#0f1117}
+  .login-card{background:#1a1d27;border:1px solid #2d3148;border-radius:16px;padding:40px;width:100%;max-width:400px}
+  .logo{font-size:22px;font-weight:700;color:#fff;margin-bottom:6px}
+  .logo span{color:#6366f1}
+  .tagline{font-size:13px;color:#64748b;margin-bottom:32px}
+  label{display:block;font-size:12px;color:#94a3b8;margin-bottom:6px;margin-top:16px}
+  input{width:100%;padding:10px 14px;background:#0f1117;border:1px solid #2d3148;border-radius:8px;color:#e2e8f0;font-size:14px;outline:none}
+  input:focus{border-color:#6366f1}
+  .btn{width:100%;padding:11px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;margin-top:24px}
+  .btn:hover{background:#5457e5}
+  .btn:disabled{background:#2d3148;color:#64748b;cursor:not-allowed}
+  .error{color:#f87171;font-size:12px;margin-top:12px;display:none}
+  .api-url-note{font-size:11px;color:#475569;margin-top:16px;text-align:center}
+
+  /* App */
+  #app-screen{display:none}
+  .topbar{background:#1a1d27;border-bottom:1px solid #2d3148;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between}
+  .topbar-logo{font-size:16px;font-weight:700;color:#fff}.topbar-logo span{color:#6366f1}
+  .topbar-right{display:flex;align-items:center;gap:16px}
+  .tenant-badge{font-size:12px;background:#1e2035;border:1px solid #2d3148;padding:4px 12px;border-radius:20px;color:#94a3b8}
+  .logout-btn{font-size:12px;color:#64748b;cursor:pointer;background:none;border:none}
+  .logout-btn:hover{color:#e2e8f0}
+  
+  .content{padding:24px;max-width:1100px;margin:0 auto}
+  
+  /* KPI cards */
+  .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+  .kpi{background:#1a1d27;border:1px solid #2d3148;border-radius:12px;padding:16px}
+  .kpi-label{font-size:11px;color:#64748b;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em}
+  .kpi-value{font-size:28px;font-weight:700;color:#fff}
+  .kpi-value.green{color:#34d399}
+  .kpi-value.red{color:#f87171}
+  .kpi-value.amber{color:#fbbf24}
+  .kpi-sub{font-size:11px;color:#475569;margin-top:4px}
+
+  /* Section */
+  .section{background:#1a1d27;border:1px solid #2d3148;border-radius:12px;padding:20px;margin-bottom:16px}
+  .section-title{font-size:13px;font-weight:600;color:#94a3b8;margin-bottom:16px;text-transform:uppercase;letter-spacing:.05em}
+  
+  /* Robot cards */
+  .robot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+  .robot-card{background:#0f1117;border:1px solid #2d3148;border-radius:10px;padding:14px;cursor:pointer;transition:border-color .15s}
+  .robot-card:hover{border-color:#6366f1}
+  .robot-id{font-size:14px;font-weight:600;color:#fff;margin-bottom:8px}
+  .robot-status{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;margin-bottom:10px;text-transform:uppercase}
+  .s-moving{background:#1e3a5f;color:#60a5fa}
+  .s-idle{background:#1a2e1a;color:#4ade80}
+  .s-charging{background:#2d2a00;color:#fbbf24}
+  .s-fault{background:#3b1212;color:#f87171}
+  .s-unknown{background:#1e1e2e;color:#64748b}
+  .robot-metric{display:flex;justify-content:space-between;font-size:12px;color:#64748b;margin-top:4px}
+  .robot-metric span{color:#94a3b8}
+  .battery-bar{height:4px;background:#1e2035;border-radius:2px;margin-top:8px}
+  .battery-fill{height:4px;border-radius:2px;transition:width .5s}
+
+  /* Fault log */
+  .fault-table{width:100%;border-collapse:collapse}
+  .fault-table th{text-align:left;font-size:11px;color:#475569;padding:8px 12px;border-bottom:1px solid #2d3148;font-weight:500}
+  .fault-table td{padding:10px 12px;font-size:13px;border-bottom:1px solid #1a1d27}
+  .fault-table tr:last-child td{border-bottom:none}
+  .fault-code{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;background:#3b1212;color:#f87171}
+  
+  /* Refresh */
+  .refresh-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .refresh-btn{font-size:12px;background:#1e2035;border:1px solid #2d3148;color:#94a3b8;padding:6px 14px;border-radius:6px;cursor:pointer}
+  .refresh-btn:hover{border-color:#6366f1;color:#fff}
+  .last-update{font-size:11px;color:#475569}
+  
+  /* Loading */
+  .loading{text-align:center;padding:40px;color:#475569;font-size:13px}
+  
+  /* Robot detail modal */
+  .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center}
+  .modal-bg.open{display:flex}
+  .modal{background:#1a1d27;border:1px solid #2d3148;border-radius:16px;padding:28px;width:100%;max-width:480px}
+  .modal-title{font-size:16px;font-weight:600;color:#fff;margin-bottom:20px;display:flex;justify-content:space-between}
+  .modal-close{background:none;border:none;color:#64748b;font-size:20px;cursor:pointer;line-height:1}
+  .metric-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #1e2035;font-size:13px}
+  .metric-row:last-child{border-bottom:none}
+  .metric-key{color:#64748b}
+  .metric-val{color:#e2e8f0;font-weight:500}
+
+  /* API URL setup */
+  .setup-note{font-size:12px;color:#475569;margin-top:8px}
+  .api-input-row{display:flex;gap:8px;margin-top:8px}
+  .api-input-row input{flex:1;margin:0}
+  .api-input-row button{padding:10px 16px;background:#1e2035;border:1px solid #2d3148;color:#94a3b8;border-radius:8px;cursor:pointer;font-size:13px;white-space:nowrap}
+  .api-input-row button:hover{border-color:#6366f1;color:#fff}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="logo">Fleet<span>Watch</span></div>
+    <div class="tagline">Robot fleet observability for EU warehouses</div>
+
+    <label>API URL</label>
+    <div class="api-input-row">
+      <input type="text" id="api-url" placeholder="http://localhost:8000" />
+      <button onclick="setLocalhost()">Use localhost</button>
+    </div>
+    <div class="setup-note">Paste your ngrok URL above, or click "Use localhost" if running locally</div>
+
+    <label>Company</label>
+    <input type="text" id="company" value="FleetWatch" />
+
+    <label>Email</label>
+    <input type="email" id="email" value="sam@fleetwatch.io" />
+
+    <label>Password</label>
+    <input type="password" id="password" value="test123" />
+
+    <button class="btn" id="login-btn" onclick="login()">Sign in</button>
+    <div class="error" id="login-error">Invalid email or password</div>
+
+    <div class="api-url-note">No account yet? <a href="#" onclick="register()" style="color:#6366f1">Create one</a></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen">
+  <div class="topbar">
+    <div class="topbar-logo">Fleet<span>Watch</span></div>
+    <div class="topbar-right">
+      <div class="tenant-badge" id="tenant-name">—</div>
+      <button class="logout-btn" onclick="logout()">Sign out</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="refresh-bar">
+      <div class="last-update" id="last-update">Loading...</div>
+      <button class="refresh-btn" onclick="loadAll()">Refresh</button>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid" id="kpi-grid">
+      <div class="kpi"><div class="kpi-label">Fleet uptime</div><div class="kpi-value" id="k-uptime">—</div></div>
+      <div class="kpi"><div class="kpi-label">Robots online</div><div class="kpi-value" id="k-robots">—</div></div>
+      <div class="kpi"><div class="kpi-label">Avg battery</div><div class="kpi-value" id="k-battery">—</div></div>
+      <div class="kpi"><div class="kpi-label">Tasks completed</div><div class="kpi-value" id="k-tasks">—</div></div>
+      <div class="kpi"><div class="kpi-label">Active faults</div><div class="kpi-value" id="k-faults">—</div></div>
+    </div>
+
+    <!-- Robots -->
+    <div class="section">
+      <div class="section-title">Robot fleet</div>
+      <div class="robot-grid" id="robot-grid"><div class="loading">Loading robots...</div></div>
+    </div>
+
+    <!-- Faults -->
+    <div class="section">
+      <div class="section-title">Fault log — last 24 hours</div>
+      <div id="fault-log"><div class="loading">Loading faults...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Robot detail modal -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="modal-robot-id">Robot detail</span>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+let TOKEN = '';
+let API = '';
+let refreshTimer = null;
+let refreshing = false;
+
+function setLocalhost() {
+  document.getElementById('api-url').value = 'http://localhost:8000';
+}
+
+async function parseResponse(response) {
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.detail || `Request failed (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
+
+function api(path, opts={}) {
+  return fetch(API + path, {
+    ...opts,
+    headers: { 'ngrok-skip-browser-warning': 'true', ...(opts.headers||{}) }
+  }).then(parseResponse);
+}
+
+async function authApi(path, opts={}) {
+  let response;
+  try {
+    response = await fetch(API + path, {
+      ...opts,
+      headers: {
+        'Authorization': 'Bearer ' + TOKEN,
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+        ...(opts.headers||{})
+      }
+    });
+    return await parseResponse(response);
+  } catch (error) {
+    if (error.status === 401) logout('Your session expired. Please sign in again.');
+    throw error;
+  }
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>'"]/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+  })[character]);
+}
+
+function startAutoRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(loadAll, 15000);
+}
+
+async function register() {
+  API = document.getElementById('api-url').value.trim().replace(/\/$/, '');
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  const company = document.getElementById('company').value.trim();
+  const err = document.getElementById('login-error');
+  try {
+    await api('/auth/register', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({email, password, company})
+    });
+    await login();
+  } catch (error) {
+    err.textContent = error.message;
+    err.style.display = 'block';
+  }
+}
+
+async function login() {
+  API = document.getElementById('api-url').value.trim().replace(/\/$/, '');
+  const btn = document.getElementById('login-btn');
+  const err = document.getElementById('login-error');
+  btn.disabled = true; btn.textContent = 'Signing in...';
+  err.style.display = 'none';
+  try {
+    const form = new URLSearchParams();
+    form.append('username', document.getElementById('email').value);
+    form.append('password', document.getElementById('password').value);
+    const data = await fetch(API + '/auth/token', {
+      method:'POST', body: form,
+      headers: {'ngrok-skip-browser-warning': 'true'}
+    }).then(parseResponse);
+    TOKEN = data.access_token;
+    localStorage.setItem('fw_token', TOKEN);
+    localStorage.setItem('fw_api', API);
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app-screen').style.display = 'block';
+    loadAll();
+    startAutoRefresh();
+  } catch(e) {
+    err.textContent = e.message || 'Invalid email or password';
+    err.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Sign in';
+  }
+}
+
+function logout(message='') {
+  TOKEN = '';
+  localStorage.removeItem('fw_token');
+  localStorage.removeItem('fw_api');
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = null;
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  const err = document.getElementById('login-error');
+  err.textContent = message;
+  err.style.display = message ? 'block' : 'none';
+  const btn = document.getElementById('login-btn');
+  btn.disabled = false;
+  btn.textContent = 'Sign in';
+}
+
+async function loadAll() {
+  if (refreshing || !TOKEN) return;
+  refreshing = true;
+  try {
+    await Promise.all([loadSummary(), loadRobots(), loadFaults()]);
+    document.getElementById('last-update').textContent =
+      'Last updated: ' + new Date().toLocaleTimeString();
+  } catch (error) {
+    if (error.status !== 401) {
+      document.getElementById('last-update').textContent = 'Refresh failed: ' + error.message;
+    }
+  } finally {
+    refreshing = false;
+  }
+}
+
+async function loadSummary() {
+  const d = await authApi('/fleet/summary');
+  document.getElementById('tenant-name').textContent = d.tenant || '—';
+
+  const uptime = d.fleet_uptime_pct;
+  const uEl = document.getElementById('k-uptime');
+  uEl.textContent = (uptime ?? '—') + '%';
+  uEl.className = 'kpi-value ' + (uptime >= 95 ? 'green' : uptime >= 80 ? 'amber' : 'red');
+
+  const online = d.online_robots ?? 0;
+  document.getElementById('k-robots').textContent = `${online}/${d.robot_count ?? '—'}`;
+  document.getElementById('k-robots').className = 'kpi-value ' +
+    (online === d.robot_count ? 'green' : online > 0 ? 'amber' : 'red');
+
+  const bat = d.avg_battery_pct;
+  const bEl = document.getElementById('k-battery');
+  bEl.textContent = (bat ?? '—') + '%';
+  bEl.className = 'kpi-value ' + (bat >= 50 ? 'green' : bat >= 20 ? 'amber' : 'red');
+
+  document.getElementById('k-tasks').textContent = d.total_tasks ?? '—';
+  document.getElementById('k-tasks').className = 'kpi-value green';
+
+  const faults = d.active_faults;
+  const fEl = document.getElementById('k-faults');
+  fEl.textContent = faults ?? '—';
+  fEl.className = 'kpi-value ' + (faults === 0 ? 'green' : faults === 1 ? 'amber' : 'red');
+}
+
+async function loadRobots() {
+  const d = await authApi('/fleet/robots');
+  const grid = document.getElementById('robot-grid');
+  grid.innerHTML = '';
+  const details = await Promise.all((d.robots || []).map(rid =>
+    authApi('/fleet/robots/' + encodeURIComponent(rid))
+  ));
+  for (const [index, rid] of (d.robots || []).entries()) {
+    const detail = details[index];
+    const m = detail.metrics || {};
+    const status = m['robot_status.status'] || 'unknown';
+    const battery = m['battery.soc_pct'] != null ? Math.round(m['battery.soc_pct']) : null;
+    const speed = m['odometry.speed_ms'] != null ? m['odometry.speed_ms'].toFixed(1) : '0.0';
+    const tasks = m['tasks.completed_total'] ?? '—';
+    const fault = m['robot_status.fault_code'];
+
+    const sc = 's-' + (status === 'moving' ? 'moving' : status === 'idle' ? 'idle' :
+               status === 'charging' ? 'charging' : status === 'fault' ? 'fault' : 'unknown');
+    const batColor = battery >= 50 ? '#34d399' : battery >= 20 ? '#fbbf24' : '#f87171';
+
+    const card = document.createElement('div');
+    card.className = 'robot-card';
+    card.innerHTML = `
+      <div class="robot-id">${escapeHtml(rid)}</div>
+      <div class="robot-status ${sc}">${escapeHtml(status)}</div>
+      <div class="robot-metric">Battery <span>${battery != null ? battery + '%' : '—'}</span></div>
+      <div class="battery-bar"><div class="battery-fill" style="width:${battery||0}%;background:${batColor}"></div></div>
+      <div class="robot-metric">Speed <span>${speed} m/s</span></div>
+      <div class="robot-metric">Tasks <span>${tasks}</span></div>
+      ${fault && fault !== 'none' ? `<div class="robot-metric">Fault <span style="color:#f87171">${escapeHtml(fault)}</span></div>` : ''}
+    `;
+    card.onclick = () => showRobot(rid, detail);
+    grid.appendChild(card);
+  }
+}
+
+function showRobot(rid, detail) {
+  document.getElementById('modal-robot-id').textContent = rid;
+  const m = detail.metrics || {};
+  const rows = [
+    ['Status',    m['robot_status.status'] || '—'],
+    ['Battery',   (m['battery.soc_pct'] != null ? Math.round(m['battery.soc_pct']) + '%' : '—')],
+    ['Speed',     (m['odometry.speed_ms'] != null ? m['odometry.speed_ms'].toFixed(2) + ' m/s' : '—')],
+    ['Position',  (m['odometry.x_m'] != null ? `x=${m['odometry.x_m'].toFixed(1)}m, y=${m['odometry.y_m'].toFixed(1)}m` : '—')],
+    ['Tasks done', m['tasks.completed_total'] ?? '—'],
+    ['Fault code', (m['robot_status.fault_code'] && m['robot_status.fault_code'] !== 'none') ? m['robot_status.fault_code'] : 'None'],
+  ];
+  document.getElementById('modal-body').innerHTML = rows.map(([k,v]) =>
+    `<div class="metric-row"><div class="metric-key">${escapeHtml(k)}</div><div class="metric-val">${escapeHtml(v)}</div></div>`
+  ).join('');
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+async function loadFaults() {
+  const d = await authApi('/fleet/faults?limit=15');
+  const el = document.getElementById('fault-log');
+  if (!d.faults || d.faults.length === 0) {
+    el.innerHTML = '<div class="loading" style="color:#34d399">No faults in the last 24 hours</div>';
+    return;
+  }
+  el.innerHTML = `<table class="fault-table">
+    <thead><tr><th>Robot</th><th>Fault code</th><th>Timestamp</th></tr></thead>
+    <tbody>${d.faults.map(f => `
+      <tr>
+        <td>${escapeHtml(f.robot_id)}</td>
+        <td><span class="fault-code">${escapeHtml(f.fault_code)}</span></td>
+        <td>${new Date(f.timestamp).toLocaleString()}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+// Auto-restore session
+window.onload = () => {
+  const t = localStorage.getItem('fw_token');
+  const a = localStorage.getItem('fw_api');
+  if (t && a) {
+    TOKEN = t; API = a;
+    document.getElementById('api-url').value = a;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app-screen').style.display = 'block';
+    loadAll();
+    startAutoRefresh();
+  } else {
+    document.getElementById('api-url').value =
+      location.protocol.startsWith('http') ? location.origin : 'http://localhost:8000';
+  }
+};
+
+document.getElementById('modal').onclick = (e) => {
+  if (e.target === document.getElementById('modal')) closeModal();
+};
+</script>
+</body>
+</html>
